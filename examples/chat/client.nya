@@ -1,0 +1,22 @@
+module chat/client;
+import net;
+import io;
+
+server := "127.0.0.1:90";
+
+main := () {
+	client := net/socket(.INET, .STREAM, .TCP);
+	server->net/connect(net/addr(server));
+
+	loop {
+		inputs := io/select([0, client]);
+		if inputs->has(0) {
+			message := io/read(0);
+			match message
+			case "/exit": break;
+			else: client->io/write(message);
+		} else {
+			io/write(1, client->io/read());
+		}
+	}
+}

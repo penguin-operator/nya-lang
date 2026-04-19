@@ -1,0 +1,24 @@
+module chat/server;
+import net;
+import io;
+
+clients: []i32;
+
+main := () {
+	server := net/socket(.INET, .STREAM, .TCP);
+	server->net/bind(net/addr("0.0.0.0:90"));
+	server->net/listen();
+
+	loop {
+		sockets := io/select([server, clients..]);
+		if sockets->has(server) {
+			client, addr := server->net/accept();
+			username := client->io/read();
+			for c in clients: c->io/write(@format(username, " joined the chat\n"));
+			clients=>append(client);
+		} else {
+			message := client->io/read();
+			for c in clients: if c !in sockets: c->io/write(message);
+		}
+	}
+}
