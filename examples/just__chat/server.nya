@@ -1,0 +1,22 @@
+from "io" import read, write, close, select;
+from "net" import socket, bind, setsockopt, listen, accept;
+
+server := socket(.INET, .STREAM, .TCP);
+bind(server, {"localhost", 9090});
+setsockopt(server, .SOCKET, .REUSEADDR, 1);
+listen(server);
+clients: []i32;
+
+for {
+	rf, _, _ := select([server, ..clients], [], []);
+	if rf == [server] {
+		conn := accept(server);
+		name := read(conn);
+		for c in clients: write(c, format("{} has joined the chat", name));
+		append(@clients, conn);
+	} else: for c in rf {
+		msg := read(c);
+		if msg != "": for cc in clients: write(cc, msg);
+		else: remove(&clients, c);
+	}
+}

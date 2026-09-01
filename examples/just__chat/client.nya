@@ -1,0 +1,91 @@
+# Work In Progress
+# Custom TUI engine made, but it might have bugs
+
+from "io" import read, write, close, select, ioctl;
+from "io/tty" import termios, tcgetattr, tcsetattr;
+from "proc" import signal;
+from "net" import socket, connect;
+
+term := tcgetattr(0);
+write(1, "\e[?1049h\e[H");
+t := term;
+t.c_iflag -= (.BRKINT, .ICRNL, .INPCK, .ISTRIP, .IXON);
+t.c_oflag -= (.OPOST);
+t.c_cflag += (.CS8);
+t.c_lflag -= (.ECHO, .ICANON, .IEXTEN, .ISIG);
+t.c_cc[.VMIN] = 1;
+t.c_cc[.VTIME] = 0;
+tcsetattr(0, .NOW, t);
+size: struct { h, w: u16 };
+ioctl(0, .TIOCGWINSZ, size);
+
+signal(.SIGWINCH, fn(_) {
+	ioctl(0, .TIOCGWINSZ, size);
+	write(1, "\e[H\e[J");
+})
+
+client := socket(.INET, .STREAM, .TCP);
+connect(client, {"localhost", 9090});
+
+lines: []str;
+buffer: str;
+c: u16 = 0;
+
+for {
+	rf, _, _ := select([0, client], [], []);
+	write(1, "\e[H\e[J");
+	l := len(buffer) / size.w;
+	m := len(lines) - l;
+	for i in 0..(size.w-l):
+		print(lines[m+i]);
+	write(1, concat("\e[", str(size.h-l), ";1H"));
+	for i in 0..l:
+		println(buffer[i*l..(i+1)*l]);
+	cx, cy := c / size.w, c % size.w;
+	write(1, concat("\e[", str(cy), ";", str(cx), "H"));
+	if rf == [0] {
+		key := read(0);
+		match key[0]
+		case '\n' {
+			write(client, buffer);
+			clear(@buffer);
+			c = 0;
+		} case 127:
+			if (l := len(buffer)) - c > 0:
+				remove(@buffer, l - (--c));
+		case '\e' {
+			if key[1] == '[' {
+				match key[2]
+				case 'A' { # Up
+					if c > 0: c -= size.w;
+				} 
+				case 'B' { # Down
+					if c < l - 1: c += size.w;
+				}
+				case 'C' { # Right
+					if c > 0: c --;
+				}
+				case 'D' { # Left
+					if c > 0: c ++;
+				}
+				case 'F' { # End
+					c = l - 1;
+				}
+				case 'H' { # Home
+					c = 0;
+				}
+			}
+		} else {
+			append(@buffer, key[0]);
+			c ++;
+		}
+	} else {
+		lines := read(client);
+		l = len(lines) / size.w;
+		for i in 0..l:
+			append(@lines, message[i*l..(i+1)*l]);
+	}
+}
+
+tcsetattr(0, .NOW, term);
+write(1, "\e[?1049l");
