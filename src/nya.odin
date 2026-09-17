@@ -4,6 +4,8 @@ package nya
 import "core:strings"
 import "core:fmt"
 import "core:os"
+import "parse"
+import "parse/ast"
 
 main :: proc () {
 	args := os.args[1:]
@@ -14,9 +16,10 @@ main :: proc () {
 			_, output: string = os.split_path(path)
 			return output
 		}(),
+		"" = false,
 	}
 	for arg, i in args {
-		if arg[0] == '-' {
+		if arg[0] == '-' && arg != "-" {
 			opt := arg[1:]
 			val: string
 			if strings.contains(opt, "=") {
@@ -35,5 +38,9 @@ main :: proc () {
 				opts[opt] = true
 			}
 		} else do append(&inputs, arg)
+	}
+	modules: [dynamic]ast.module
+	for path in inputs {
+		append(&modules, parse.parse(path))
 	}
 }
